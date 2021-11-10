@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>three.js webgl - loaders - MMD loader</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link type="text/css" rel="stylesheet" href="main.css">
+	<style>
+		body {
+			background-color: #fff;
+			color: #444;
+		}
+
+		a {
+			color: #08f;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="info"></div>
+
+	<script src="js/libs/ammo.wasm.js"></script>
+	<script src="scoreoutputer.min.js"></script>
+
+	<script>
+		// 建構子 ScoreOutputer 接受一個字串，該字串為 csv 的檔案名稱
+		// 以下面範例，檔名就為 "109598105(總分: 6).csv"
+		var so = new ScoreOutputer("107830018");
+		so.installCSS(function () {
+			// 安裝 bootstrap 的 css，如果在 html 上方引用 bootstrap 5.1.1 的話就不用使用 installCSS ，注意一定要 bootstrap css 5.1.1 版
+			// installCSS 接收一個 callback 當作參數，作為成功安裝 bootstrap css 的回呼函式
+
+			//加入項目，分數，完成狀況
+			//第一個參數為 項目名稱
+			//第2個參數為 項目分數
+			//第3個參數為 完成狀況，有完成 true/未完成 false
+			//有幾個項目就呼叫幾個 addChild
+			//addChild 要比 renderModal 先呼叫
+			so.addChild("繪製出 5 個畫面", 1, true);
+			so.addChild("回答問題", 1, true);
+			so.addChild("可按鍵選擇上 / 下一隻角色", 1, false);
+			so.addChild("讀取作業 2 儲存的座標點在眼睛上繪製出分割線", 1, true);
+			so.addChild("可選擇當下控制哪個虹膜", 1, true);
+			so.addChild("按滑鼠左鍵控制虹膜移動，右鍵停止", 2, true);
+			so.addChild("複製參數至對應目標參數", 2, true);
+			so.addChild("可儲存虹膜轉動角度", 1, false);
+
+			//產生自評表，參數如下所示
+			so.renderModal(
+				//1. 自評表插入位置 (預設 document.body)
+				document.body,
+				//2. 自評表背景 (預設紅色)
+				'rgba(100,45,58,1)',
+				//3. 自評表文字顏色 (預設白色)
+				'white',
+				//4. 自評表文字大小 (預設 14pt)
+				'15pt',
+				//5. 自評表 checkbox 文字大小 (預設多少忘了)
+				'15px',
+				//6. 自評表標題 (預設 "自我評分表")
+				dialogTitle = "自我評分表"
+			);
+
+			//設定下載按鈕 <-- 一定要呼叫這個函數，不然沒有下載功能
+			so.installDownloadBtn();
+
+			//產生 "開啟自評表按鈕"
+			so.renderBtn(
+				//自評表按鈕插入位置
+				document.querySelector("#info"),
+				//自評表按鈕文字
+				"開啟自評表"
+			);
+		});
+	</script>
+	<script type="module">
+
+		import * as THREE from './build/three.module.js';
+		import { GUI } from './jsm/libs/dat.gui.module.js';
+		import { OrbitControls } from './jsm/controls/OrbitControls.js';
+		import { OutlineEffect } from './jsm/effects/OutlineEffect.js';
+		import { MMDLoader } from './jsm/loaders/MMDLoader.js';
+		import { MMDAnimationHelper } from './jsm/animation/MMDAnimationHelper.js';
+		var first=1;
+		var x=0;
+		var basic_x=0,basic_y=0;
+		let scene, renderer, effect,scene2;
+		var clean=0,line1,line2,line3,line4,line5;
+		var vline1,vline2,vline3,vline4,vline5,vline6,vline7,vline8,vline9;
+		var positions1,positions2,positions3,positions4,positions5;
+		var vpositions1,vpositions2,vpositions3,vpositions4,vpositions5,vpositions6,vpositions7,vpositions8,vpositions9;
+		let mesh, helper;
+		let SCREEN_WIDTH = window.innerWidth;
+		let SCREEN_HEIGHT = window.innerHeight;
+		let aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+		let frustumSize = 3.5;
+		//let frustumSize = 30;
+		let camera, camera2, camera3, camera4, camera5;
+		var now_click=0,now_put_down=0;
+		var mouse = new THREE.Vector3();
+		var change=0;
+		var select=0;
+		var x1,y1,x2,y2,x3,y3,x4,y4;
+		const loader = new MMDLoader();
+		var modelFiles = ["models/mmd/kizunaai/kizunaai.pmx","models/mmd/るいのれ式物述有栖_配布用フォルダ/物述有栖.pmx","models/mmd/『天宮こころ(Kokoro Amamiya)』/『天宮こころ(Kokoro Amamiya)』.pmx"];
+		var eyes = [[1,2,3],[1,2,3],[1,2,3],[1,2,3],[1,2,3],[1,2,3],[1,2,3],[1,2,3]];
+		//先右再左
+		eyes[0][0] = eyes[1][0] = 0.15;
+		eyes[0][1] = eyes[1][1] = eyes[0][2] = eyes[1][2] = 0;
+		eyes[2][0] = eyes[3][0] = -0.2;
+		eyes[2][1] = eyes[3][1] = eyes[2][2] = eyes[3][2] = 0;
+		eyes[4][1] = 0.14;
+		eyes[5][1] = 0.22;
+		eyes[4][0] = eyes[5][0] = eyes[4][2] = eyes[5][2] = 0;
+		eyes[6][1] = -0.22;
+		eyes[7][1] = -0.14;
+		eyes[6][0] = eyes[6][2] = eyes[7][0] = eyes[7][2] = 0;
+		//eyes[1][0] = eyes[1][1] = -0.2;
+		
+		Ammo().then(function (AmmoLib) {
+
+			Ammo = AmmoLib;
+
+			init();
+			animate();
+
+		});
+		function read_json(){
+			var url="model_data.json";
+			var request = new XMLHttpRequest();
+			request.open("get",url);
+			request.send(null);
+			request.onload = function (){
+				if (request.status == 200){
+					var json = JSON.parse(request.responseText);
+					for(var i=0;i<json.modellist.length;i++){
+						
+						console.log(json.modellist[i].location);
+					}
+					x1 = json.modellist[0].line_locationx_1;
+					y1 = json.modellist[0].line_locationy_1;
+					x2 = json.modellist[0].line_locationx_2;
+					y2 = json.modellist[0].line_locationy_2;
+					x3 = json.modellist[0].line_locationx_3;
+					y3 = json.modellist[0].line_locationy_3;
+					x4 = json.modellist[0].line_locationx_4;
+					y4 = json.modellist[0].line_locationy_4;
+					//console.log(json.modellist[0].line_locationx_1);
+				}
+			}
+		}
+		read_json();
+		function init() {
+
+			const container = document.createElement('div');
+			document.body.appendChild(container);
+			camera = new THREE.OrthographicCamera(0.5 * frustumSize * aspect / - 12, 0.5 * frustumSize * aspect / 12, frustumSize / 12, frustumSize / - 12, 0.1, 1000);
+			camera2 = new THREE.OrthographicCamera(0.25 * frustumSize * aspect / - 2, 0.25 * frustumSize * aspect / 2, 0.5 * frustumSize / 2, 0.5 * frustumSize / - 2, 0.1, 1000);
+			camera3 = new THREE.OrthographicCamera(0.25 * frustumSize * aspect / - 2, 0.25 * frustumSize * aspect / 2, 0.5 * frustumSize / 2, 0.5 * frustumSize / - 2, 0.1, 1000);
+			camera4 = new THREE.OrthographicCamera(0.25 * frustumSize * aspect / - 2, 0.25 * frustumSize * aspect / 2, 0.5 * frustumSize / 2, 0.5 * frustumSize / - 2, 0.1, 1000);
+			camera5 = new THREE.OrthographicCamera(0.25 * frustumSize * aspect / - 2, 0.25 * frustumSize * aspect / 2, 0.5 * frustumSize / 2, 0.5 * frustumSize / - 2, 0.1, 1000);
+			camera.position.y = 8.25;
+			camera.position.z = 30;
+			camera.position.x=-0.53;
+			camera2.position.z = 30;
+			camera2.position.y = 8;
+			camera3.position.z = 30;
+			camera3.position.y = 8;
+			camera4.position.z = 30;
+			camera4.position.y = 8;
+			camera5.position.z = 30;
+			camera5.position.y = 8;
+
+			// scene
+
+			scene = new THREE.Scene();
+			scene2 = new THREE.Scene();
+			const ambient = new THREE.AmbientLight(0x666666);
+			scene.add(ambient);
+
+			const directionalLight = new THREE.DirectionalLight(0x887766);
+			directionalLight.position.set(- 1, 1, 1).normalize();
+			scene.add(directionalLight);
+
+			//
+
+			renderer = new THREE.WebGLRenderer({ antialias: true });
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			container.appendChild(renderer.domElement);
+			renderer.autoClear = false;
+			effect = new OutlineEffect(renderer);
+
+			// model
+			function onProgress(xhr) {
+
+				if (xhr.lengthComputable) {
+
+					const percentComplete = xhr.loaded / xhr.total * 100;
+					console.log(Math.round(percentComplete, 2) + '% downloaded');
+
+				}
+
+			}
+
+			const modelFile = 'models/mmd/kizunaai/kizunaai.pmx';
+			
+			helper = new MMDAnimationHelper();
+
+			const loader = new MMDLoader();
+
+			loader.load(modelFile, function (object) {
+
+				mesh = object;
+				mesh.position.y = - 10;
+				console.log(mesh.skeleton.bones);
+				console.log(mesh.skeleton.bones[86]);
+				mesh.skeleton.bones[86].rotation.x=0.15;
+				mesh.skeleton.bones[88].rotation.x=0.15;
+				scene.add(mesh);
+
+			}, onProgress, null);
+
+			//
+
+			window.addEventListener('resize', onWindowResize);
+			//鏡頭控制
+			
+
+			//line
+			// geometry
+			var linegeometry = new THREE.BufferGeometry();
+			var linegeometry2 = new THREE.BufferGeometry();
+			var linegeometry3 = new THREE.BufferGeometry();
+			var linegeometry4 = new THREE.BufferGeometry();
+			var linegeometry5 = new THREE.BufferGeometry();
+			var vlinegeometry = new THREE.BufferGeometry();
+			var vlinegeometry2 = new THREE.BufferGeometry();
+			var vlinegeometry3 = new THREE.BufferGeometry();
+			var vlinegeometry4 = new THREE.BufferGeometry();
+			var vlinegeometry5 = new THREE.BufferGeometry();
+			var vlinegeometry6 = new THREE.BufferGeometry();
+			var vlinegeometry7 = new THREE.BufferGeometry();
+			var vlinegeometry8 = new THREE.BufferGeometry();
+			var vlinegeometry9 = new THREE.BufferGeometry();
+					
+			var MAX_POINTS = 500;
+			positions1 = new Float32Array(MAX_POINTS * 3);
+			positions2 = new Float32Array(MAX_POINTS * 3);
+			positions3 = new Float32Array(MAX_POINTS * 3);
+			positions4 = new Float32Array(MAX_POINTS * 3);
+			positions5 = new Float32Array(MAX_POINTS * 3);
+			vpositions1 = new Float32Array(MAX_POINTS * 3);
+			vpositions2 = new Float32Array(MAX_POINTS * 3);
+			vpositions3 = new Float32Array(MAX_POINTS * 3);
+			vpositions4 = new Float32Array(MAX_POINTS * 3);
+			vpositions5 = new Float32Array(MAX_POINTS * 3);
+			vpositions6 = new Float32Array(MAX_POINTS * 3);
+			vpositions7 = new Float32Array(MAX_POINTS * 3);
+			vpositions8 = new Float32Array(MAX_POINTS * 3);
+			vpositions9 = new Float32Array(MAX_POINTS * 3);
+			linegeometry.addAttribute('position', new THREE.BufferAttribute(positions1, 3));
+			linegeometry2.addAttribute('position', new THREE.BufferAttribute(positions2, 3));
+			linegeometry3.addAttribute('position', new THREE.BufferAttribute(positions3, 3));
+			linegeometry4.addAttribute('position', new THREE.BufferAttribute(positions4, 3));
+			linegeometry5.addAttribute('position', new THREE.BufferAttribute(positions5, 3));
+			vlinegeometry.addAttribute('position', new THREE.BufferAttribute(vpositions1, 3));
+			vlinegeometry2.addAttribute('position', new THREE.BufferAttribute(vpositions2, 3));
+			vlinegeometry3.addAttribute('position', new THREE.BufferAttribute(vpositions3, 3));
+			vlinegeometry4.addAttribute('position', new THREE.BufferAttribute(vpositions4, 3));
+			vlinegeometry5.addAttribute('position', new THREE.BufferAttribute(vpositions5, 3));
+			vlinegeometry6.addAttribute('position', new THREE.BufferAttribute(vpositions6, 3));
+			vlinegeometry7.addAttribute('position', new THREE.BufferAttribute(vpositions7, 3));
+			vlinegeometry8.addAttribute('position', new THREE.BufferAttribute(vpositions8, 3));
+			vlinegeometry9.addAttribute('position', new THREE.BufferAttribute(vpositions9, 3));
+
+
+			// material
+			var linematerial = new THREE.LineBasicMaterial({
+				color: 0x00ff00,
+				linewidth: 2
+			});
+
+			var vlinematerial = new THREE.LineBasicMaterial({
+				color: 0xff0000,
+				linewidth: 2
+			});
+
+			
+			// line
+			line1 = new THREE.Line(linegeometry, linematerial);
+			scene2.add(line1);
+			positions1[0] = -(x3+5);
+			positions1[1] = y3;
+			positions1[2] = 3;
+			positions1[3] = 0;
+			positions1[4] = y3;
+			positions1[5] = 3;		
+			
+			line1.geometry.setDrawRange(0, 2);
+	
+			// line5
+			line5 = new THREE.Line(linegeometry5, linematerial);
+			scene2.add(line5);
+			positions5[0] = -(x3+5);
+			positions5[1] = y1;
+			positions5[2] = 3;
+			positions5[3] = 0;
+			positions5[4] = y1;
+			positions5[5] = 3;		
+			line5.geometry.setDrawRange(0, 2);
+
+			// line2
+			line2 = new THREE.Line(linegeometry2, linematerial);
+			scene2.add(line2);
+			positions2[0] = -(x3+5);
+			positions2[1] = positions1[1]-(positions1[1]-positions5[1])/4;
+			positions2[2] = 3;
+			positions2[3] = 0;
+			positions2[4] = positions1[1]-(positions1[1]-positions5[1])/4;
+			positions2[5] = 3;		
+			line2.geometry.setDrawRange(0, 2);
+
+			// line3
+			line3 = new THREE.Line(linegeometry3, linematerial);
+			scene2.add(line3);
+			positions3[0] = -(x3+5);
+			positions3[1] = positions1[1]-2*(positions1[1]-positions5[1])/4;
+			positions3[2] = 3;
+			positions3[3] = 0;
+			positions3[4] = positions1[1]-2*(positions1[1]-positions5[1])/4;
+			positions3[5] = 3;		
+			line3.geometry.setDrawRange(0, 2);
+
+			// line4
+			line4 = new THREE.Line(linegeometry4, linematerial);
+			scene2.add(line4);
+			positions4[0] = -(x3+5);
+			positions4[1] = positions1[1]-3*(positions1[1]-positions5[1])/4;
+			positions4[2] = 3;
+			positions4[3] = 0;
+			positions4[4] = positions1[1]-3*(positions1[1]-positions5[1])/4;
+			positions4[5] = 3;		
+			line4.geometry.setDrawRange(0, 2);
+
+			// vline
+			vline1 = new THREE.Line(vlinegeometry, vlinematerial);
+			scene2.add(vline1);
+			vpositions1[0] = -x2;
+			vpositions1[1] = 10;
+			vpositions1[2] = 3;
+			vpositions1[3] = -x3;
+			vpositions1[4] = 0;
+			vpositions1[5] = 3;		
+			
+			vline1.geometry.setDrawRange(0, 2);
+
+			
+
+			// vline9
+			vline9 = new THREE.Line(vlinegeometry9, vlinematerial);
+			scene2.add(vline9);
+			vpositions9[0] = -x1;
+			vpositions9[1] = 10;
+			vpositions9[2] = 3;
+			vpositions9[3] = -x4;
+			vpositions9[4] = 0;
+			vpositions9[5] = 3;		
+			
+			vline9.geometry.setDrawRange(0, 2);
+
+			// vline2
+			vline2 = new THREE.Line(vlinegeometry2, vlinematerial);
+			scene2.add(vline2);
+			vpositions2[0] = vpositions1[0]-(vpositions1[0]-vpositions9[0])/8;
+			vpositions2[1] = 10;
+			vpositions2[2] = 3;
+			vpositions2[3] = vpositions1[0]-(vpositions1[0]-vpositions9[0])/8;
+			vpositions2[4] = 0;
+			vpositions2[5] = 3;		
+			
+			vline2.geometry.setDrawRange(0, 2);
+			// vline3
+			vline3 = new THREE.Line(vlinegeometry3, vlinematerial);
+			scene2.add(vline3);
+			vpositions3[0] = vpositions1[0]-2*(vpositions1[0]-vpositions9[0])/8;
+			vpositions3[1] = 10;
+			vpositions3[2] = 3;
+			vpositions3[3] = vpositions1[0]-2*(vpositions1[0]-vpositions9[0])/8;
+			vpositions3[4] = 0;
+			vpositions3[5] = 3;		
+			
+			vline3.geometry.setDrawRange(0, 2);
+
+			// vline4
+			vline4 = new THREE.Line(vlinegeometry4, vlinematerial);
+			scene2.add(vline4);
+			vpositions4[0] = vpositions1[0]-3*(vpositions1[0]-vpositions9[0])/8;
+			vpositions4[1] = 10;
+			vpositions4[2] = 3;
+			vpositions4[3] = vpositions1[0]-3*(vpositions1[0]-vpositions9[0])/8;
+			vpositions4[4] = 0;
+			vpositions4[5] = 3;		
+			
+			vline4.geometry.setDrawRange(0, 2);
+
+			// vline5
+			vline5 = new THREE.Line(vlinegeometry5, vlinematerial);
+			scene2.add(vline5);
+			vpositions5[0] = vpositions1[0]-4*(vpositions1[0]-vpositions9[0])/8;
+			vpositions5[1] = 10;
+			vpositions5[2] = 3;
+			vpositions5[3] = vpositions1[0]-4*(vpositions1[0]-vpositions9[0])/8;
+			vpositions5[4] = 0;
+			vpositions5[5] = 3;		
+			
+			vline5.geometry.setDrawRange(0, 2);
+
+			// vline6
+			vline6 = new THREE.Line(vlinegeometry6, vlinematerial);
+			scene2.add(vline6);
+			vpositions6[0] = vpositions1[0]-5*(vpositions1[0]-vpositions9[0])/8;
+			vpositions6[1] = 10;
+			vpositions6[2] = 3;
+			vpositions6[3] = vpositions1[0]-5*(vpositions1[0]-vpositions9[0])/8;
+			vpositions6[4] = 0;
+			vpositions6[5] = 3;		
+			
+			vline6.geometry.setDrawRange(0, 2);
+
+			// vline7
+			vline7 = new THREE.Line(vlinegeometry7, vlinematerial);
+			scene2.add(vline7);
+			vpositions7[0] = vpositions1[0]-6*(vpositions1[0]-vpositions9[0])/8;
+			vpositions7[1] = 10;
+			vpositions7[2] = 3;
+			vpositions7[3] = vpositions1[0]-6*(vpositions1[0]-vpositions9[0])/8;
+			vpositions7[4] = 0;
+			vpositions7[5] = 3;		
+			
+			vline7.geometry.setDrawRange(0, 2);
+
+			// vline8
+			vline8 = new THREE.Line(vlinegeometry8, vlinematerial);
+			scene2.add(vline8);
+			vpositions8[0] = vpositions1[0]-7*(vpositions1[0]-vpositions9[0])/8;
+			vpositions8[1] = 10;
+			vpositions8[2] = 3;
+			vpositions8[3] = vpositions1[0]-7*(vpositions1[0]-vpositions9[0])/8;
+			vpositions8[4] = 0;
+			vpositions8[5] = 3;		
+			
+			vline8.geometry.setDrawRange(0, 2);
+
+
+			
+		}
+		// update line4
+		function updateline() {
+			if(select%2===1){
+				positions1[0] = 10 ;
+				positions2[0] = 10 ;
+				positions3[0] = 10 ;
+				positions4[0] = 10 ;
+				positions5[0] = 10 ;
+				vpositions1[0] = vpositions1[3] = vpositions1[3]*(-1);
+				vpositions2[0] = vpositions2[3] = vpositions2[3]*(-1);
+				vpositions3[0] = vpositions3[3] = vpositions3[3]*(-1);
+				vpositions4[0] = vpositions4[3] = vpositions4[3]*(-1);
+				vpositions5[0] = vpositions5[3] = vpositions5[3]*(-1);
+				vpositions6[0] = vpositions6[3] = vpositions6[3]*(-1);
+				vpositions7[0] = vpositions7[3] = vpositions7[3]*(-1);
+				vpositions8[0] = vpositions8[3] = vpositions8[3]*(-1);
+				vpositions9[0] = vpositions9[3] = vpositions9[3]*(-1);
+
+			}
+			else{
+				positions1[0] = -2 ;
+				positions2[0] = -2 ;
+				positions3[0] = -2 ;
+				positions4[0] = -2 ;
+				positions5[0] = -2 ;
+				vpositions1[0] = vpositions1[3] = vpositions1[3]*(-1);
+				vpositions2[0] = vpositions2[3] = vpositions2[3]*(-1);
+				vpositions3[0] = vpositions3[3] = vpositions3[3]*(-1);
+				vpositions4[0] = vpositions4[3] = vpositions4[3]*(-1);
+				vpositions5[0] = vpositions5[3] = vpositions5[3]*(-1);
+				vpositions6[0] = vpositions6[3] = vpositions6[3]*(-1);
+				vpositions7[0] = vpositions7[3] = vpositions7[3]*(-1);
+				vpositions8[0] = vpositions8[3] = vpositions8[3]*(-1);
+				vpositions9[0] = vpositions9[3] = vpositions9[3]*(-1);
+			}
+		
+			line1.geometry.attributes.position.needsUpdate = true;
+			line2.geometry.attributes.position.needsUpdate = true;
+			line3.geometry.attributes.position.needsUpdate = true;
+			line4.geometry.attributes.position.needsUpdate = true;
+			line5.geometry.attributes.position.needsUpdate = true;
+			vline1.geometry.attributes.position.needsUpdate = true;
+			vline2.geometry.attributes.position.needsUpdate = true;
+			vline3.geometry.attributes.position.needsUpdate = true;
+			vline4.geometry.attributes.position.needsUpdate = true;
+			vline5.geometry.attributes.position.needsUpdate = true;
+			vline6.geometry.attributes.position.needsUpdate = true;
+			vline7.geometry.attributes.position.needsUpdate = true;
+			vline8.geometry.attributes.position.needsUpdate = true;
+			vline9.geometry.attributes.position.needsUpdate = true;
+			
+
+		}
+		
+		function onWindowResize() {
+
+			SCREEN_WIDTH = window.innerWidth;
+			SCREEN_HEIGHT = window.innerHeight;
+			aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+
+			effect.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+			camera.left = 0.5 * frustumSize * aspect / - 12;
+			camera.right = 0.5 * frustumSize * aspect / 12;
+			camera.top = frustumSize / 12;
+			camera.bottom = - frustumSize / 12;
+			camera.updateProjectionMatrix();
+
+			camera2.left = 0.25 * frustumSize * aspect / - 2;
+			camera2.right = 0.25 * frustumSize * aspect / 2;
+			camera2.top = 0.5 * frustumSize / 2;
+			camera2.bottom = - 0.5 * frustumSize / 2;
+			camera2.updateProjectionMatrix();
+
+			camera3.left = 0.25 * frustumSize * aspect / - 2;
+			camera3.right = 0.25 * frustumSize * aspect / 2;
+			camera3.top = 0.5 * frustumSize / 2;
+			camera3.bottom = - 0.5 * frustumSize / 2;
+			camera3.updateProjectionMatrix();
+
+			camera4.left = 0.25 * frustumSize * aspect / - 2;
+			camera4.right = 0.25 * frustumSize * aspect / 2;
+			camera4.top = 0.5 * frustumSize / 2;
+			camera4.bottom = - 0.5 * frustumSize / 2;
+			camera4.updateProjectionMatrix();
+
+			camera5.left = 0.25 * frustumSize * aspect / - 2;
+			camera5.right = 0.25 * frustumSize * aspect / 2;
+			camera5.top = 0.5 * frustumSize / 2;
+			camera5.bottom = - 0.5 * frustumSize / 2;
+			camera5.updateProjectionMatrix();
+		}
+		function onProgress(xhr) {
+
+			if (xhr.lengthComputable) {
+
+				const percentComplete = xhr.loaded / xhr.total * 100;
+				console.log(Math.round(percentComplete, 2) + '% downloaded');
+
+			}
+
+		}
+		function loadModel(path){
+			scene.remove(mesh);
+			loader.load(
+				path,function(object){
+					mesh = object;
+					mesh.position.y = - 10;
+					scene.add(mesh);
+				},
+				onProgress,null);
+		}
+		//定义鼠标事件
+        function setEventsMouse(){
+            //点击了鼠标左键
+            window.addEventListener( 'click', function(e){
+                if(e.button===0){
+                    console.log("点击了鼠标左键");
+					now_click=1;
+					basic_x=mouse.x;
+					basic_y=mouse.y;
+                }
+            } );
+            
+            //点击了鼠标右键
+            window.addEventListener( 'contextmenu', function(e){
+                if(e.button===2){
+                    console.log("点击了鼠标右键");
+					if(now_click===1){
+						now_click=0;
+						if(select%2===0){
+							if(select===0 | select===1 | select===2 | select===3){
+								eyes[select%8][0]=-(mouse.y-basic_y)*70*Math.PI/180+eyes[select%8][0];
+								
+							}
+							else{
+								
+								eyes[select%8][1]=(mouse.x-basic_x)*120*Math.PI/180+eyes[select%8][1];
+							}
+
+						}
+						else{
+							if(select===0 | select===1 | select===2 | select===3){
+								eyes[select%8][0]=-(mouse.y-basic_y)*70*Math.PI/180+eyes[select%8][0];
+								
+							}
+							else{
+								
+								eyes[select%8][1]=(mouse.x-basic_x)*120*Math.PI/180+eyes[select%8][1];
+							}
+					
+						}
+					}
+					
+					
+                }
+            } );
+            
+            //鼠标移动坐标2D坐标
+            window.addEventListener( 'mousemove', function(e){
+				mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+				mouse.y = -(event.clientY / window.innerHeight) * 2 +1;
+				mouse.z = -1;
+				mouse.unproject(camera);
+                console.log('x:'+mouse.x);
+                console.log('y:'+mouse.y);
+				if(now_click===1){
+					if(select%2===0){
+						if(select===0 | select===1 | select===2 | select===3){
+							mesh.skeleton.bones[88].rotation.x=-(mouse.y-basic_y)*70*Math.PI/180+eyes[select%8][0];
+							mesh.skeleton.bones[86].rotation.x=0;
+							mesh.skeleton.bones[88].rotation.y=eyes[select%8][1];
+							mesh.skeleton.bones[86].rotation.y=0;
+						}
+						else{
+							mesh.skeleton.bones[86].rotation.x=0;
+							mesh.skeleton.bones[88].rotation.x=eyes[select%8][0];
+							mesh.skeleton.bones[86].rotation.y=0;
+							mesh.skeleton.bones[88].rotation.y=(mouse.x-basic_x)*120*Math.PI/180+eyes[select%8][1];
+						}
+
+					}
+					else{
+						if(select===0 | select===1 | select===2 | select===3){
+							mesh.skeleton.bones[86].rotation.x=-(mouse.y-basic_y)*70*Math.PI/180+eyes[select%8][0];
+							mesh.skeleton.bones[88].rotation.x=0;
+							mesh.skeleton.bones[86].rotation.y=eyes[select%8][1];
+							mesh.skeleton.bones[88].rotation.y=0;
+						}
+						else{
+							mesh.skeleton.bones[88].rotation.x=0;
+							mesh.skeleton.bones[86].rotation.x=eyes[select%8][0];
+							mesh.skeleton.bones[88].rotation.y=0;
+							mesh.skeleton.bones[86].rotation.y=(mouse.x-basic_x)*120*Math.PI/180+eyes[select%8][1];
+						}
+				
+					}
+				}
+            } );
+ 
+        }
+		setEventsMouse();
+		
+		
+		
+		
+		//定义键盘按键事件
+        function setKeyEvents(){
+            window.addEventListener('keydown',function(e){
+				console.log(e.key);
+				if(e.key==='2'){				
+					
+					select= select+1;
+					if(select%2===0){
+						camera.position.x=-0.53;
+					}
+					else{
+						camera.position.x=0.53;
+					}
+					if(select>=8){
+						select = select%8;
+					}
+					
+					updateline();
+					
+				}
+				else if(e.key==='1'){
+					select= select-1;
+					if(select>=0){
+						if(select%2===0){
+						camera.position.x=-0.53;
+						}
+						else{
+						camera.position.x=0.53;
+						}					
+					}
+					else if(select<0){
+						select = select*(-1);
+						select = select+6;
+						if(select%2===0){
+							camera.position.x=-0.53;
+							}
+						else{
+							camera.position.x=0.53;
+						}
+						
+					}
+					if(select%2===0){
+						camera.position.x=-0.53;
+					}
+					else{
+						camera.position.x=0.53;
+					}
+					if(select>=8){
+						select = select%8;
+					}
+					updateline();
+				}
+				/*
+				else if(e.key==='a'){
+					change=change-1;
+					if(change>=0){
+						loadModel(modelFiles[change%3]);
+						
+						
+					}
+					else if(change<0){
+						change = change*(-1);
+						change = change+1;
+						loadModel(modelFiles[change%3]);
+						
+						
+					}
+					
+					
+				}
+				else if(e.key==='d'){
+					change=change+1;
+					if(change>=0){
+						loadModel(modelFiles[change%3]);
+						
+					}
+					else if(change<0){
+						change = change*(-1);
+						change = change+1;
+						loadModel(modelFiles[change%3]);
+						
+					}
+					if(change>=3){
+						change = change%3;
+					}
+					
+					
+					camera.position.y = 5.25;
+					camera.position.z = 30;
+					camera.position.x=-0.53;
+					camera2.position.z = 30;
+					camera2.position.y = 5;
+					camera3.position.z = 30;
+					camera3.position.y = 5;
+					camera4.position.z = 30;
+					camera4.position.y = 5;
+					camera5.position.z = 30;
+					camera5.position.y = 5;
+					updateline();
+					
+					
+				}
+				*/
+				else if(e.key==='q'){
+					if(select===0){
+						eyes[1][0] = eyes[0][0];
+						eyes[1][1] = eyes[0][1];
+						select = 1;
+						if(select%2===0){
+						camera.position.x=-0.53;
+						}
+						else{
+							camera.position.x=0.53;
+						}
+						if(select>=8){
+							select = select%8;
+						}
+						
+						updateline();
+					}
+					else if(select===2){
+						eyes[3][0] = eyes[2][0];
+						eyes[3][1] = eyes[2][1];
+						select = 3;
+						if(select%2===0){
+						camera.position.x=-0.53;
+						}
+						else{
+							camera.position.x=0.53;
+						}
+						if(select>=8){
+							select = select%8;
+						}
+						
+						updateline();
+					}
+					else if(select===4){
+						eyes[7][0] = eyes[4][0];
+						eyes[7][1] = -eyes[4][1];
+						select = 7;
+						if(select%2===0){
+						camera.position.x=-0.53;
+						}
+						else{
+							camera.position.x=0.53;
+						}
+						if(select>=8){
+							select = select%8;
+						}
+						
+						updateline();
+
+					}
+					else if(select===6){
+						eyes[5][0] = eyes[6][0];
+						eyes[5][1] = -eyes[6][1];
+						select = 5;
+						if(select%2===0){
+						camera.position.x=-0.53;
+						}
+						else{
+							camera.position.x=0.53;
+						}
+						if(select>=8){
+							select = select%8;
+						}
+						
+						updateline();
+					}
+					
+				}					
+                console.log(e.key);
+            }); 
+        }
+		
+
+		//
+		setKeyEvents();//定义键盘按键事件  
+		function animate() {
+
+			requestAnimationFrame(animate);
+			
+			
+			render();
+
+
+		}
+		
+		function render() {		
+			effect.clear();
+			
+			effect.setViewport(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT);
+			if(now_click===0){
+				if(select%2===0){
+					mesh.skeleton.bones[88].rotation.x=eyes[select%8][0];
+					mesh.skeleton.bones[86].rotation.x=0;
+					mesh.skeleton.bones[88].rotation.y=eyes[select%8][1];
+					mesh.skeleton.bones[86].rotation.y=0;
+				}
+				else{
+					mesh.skeleton.bones[88].rotation.x=0;
+					mesh.skeleton.bones[86].rotation.x=eyes[select%8][0];
+					mesh.skeleton.bones[88].rotation.y=0;
+					mesh.skeleton.bones[86].rotation.y=eyes[select%8][1];
+				}
+			}
+			else{
+				if(select%2===0){
+						if(select===0 | select===1 | select===2 | select===3){
+							mesh.skeleton.bones[88].rotation.x=-(mouse.y-basic_y)*70*Math.PI/180+eyes[select%8][0];
+							mesh.skeleton.bones[86].rotation.x=0;
+							mesh.skeleton.bones[88].rotation.y=eyes[select%8][1];
+							mesh.skeleton.bones[86].rotation.y=0;
+						}
+						else{
+							mesh.skeleton.bones[86].rotation.x=0;
+							mesh.skeleton.bones[88].rotation.x=eyes[select%8][0];
+							mesh.skeleton.bones[86].rotation.y=0;
+							mesh.skeleton.bones[88].rotation.y=(mouse.x-basic_x)*120*Math.PI/180+eyes[select%8][1];
+						}
+
+					}
+				else{
+						if(select===0 | select===1 | select===2 | select===3){
+							mesh.skeleton.bones[86].rotation.x=-(mouse.y-basic_y)*70*Math.PI/180+eyes[select%8][0];
+							mesh.skeleton.bones[88].rotation.x=0;
+							mesh.skeleton.bones[86].rotation.y=eyes[select%8][1];
+							mesh.skeleton.bones[88].rotation.y=0;
+						}
+						else{
+							mesh.skeleton.bones[88].rotation.x=0;
+							mesh.skeleton.bones[86].rotation.x=eyes[select%8][0];
+							mesh.skeleton.bones[88].rotation.y=0;
+							mesh.skeleton.bones[86].rotation.y=(mouse.x-basic_x)*120*Math.PI/180+eyes[select%8][1];
+						}
+				
+				}
+			}	
+			effect.render(scene, camera);
+			
+			effect.render(scene2,camera);
+			effect.setViewport(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
+			mesh.skeleton.bones[88].rotation.x=eyes[0][0];
+			mesh.skeleton.bones[86].rotation.x=eyes[1][0];
+			mesh.skeleton.bones[88].rotation.y=eyes[0][1];
+			mesh.skeleton.bones[86].rotation.y=eyes[1][1];
+			
+			effect.render(scene, camera2);
+			if(select===0 | select===1)
+				effect.render(scene2,camera2);
+
+			effect.setViewport(SCREEN_WIDTH / 2 + SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2, SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
+			mesh.skeleton.bones[88].rotation.x=eyes[2][0];
+			mesh.skeleton.bones[86].rotation.x=eyes[3][0];
+			mesh.skeleton.bones[88].rotation.y=eyes[2][1];
+			mesh.skeleton.bones[86].rotation.y=eyes[3][1];
+			effect.render(scene, camera3);
+			if(select===2 | select===3)
+				effect.render(scene2,camera3);
+
+			effect.setViewport(SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
+			mesh.skeleton.bones[88].rotation.x=eyes[4][0];
+			mesh.skeleton.bones[86].rotation.x=eyes[5][0];
+			mesh.skeleton.bones[88].rotation.y=eyes[4][1];
+			mesh.skeleton.bones[86].rotation.y=eyes[5][1];
+			
+			effect.render(scene, camera4);
+			if(select===4 | select===5)
+				effect.render(scene2,camera4);
+
+			effect.setViewport(SCREEN_WIDTH / 2 + SCREEN_WIDTH / 4, 0, SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
+			mesh.skeleton.bones[88].rotation.x=eyes[6][0];
+			mesh.skeleton.bones[86].rotation.x=eyes[7][0];
+			mesh.skeleton.bones[88].rotation.y=eyes[6][1];
+			mesh.skeleton.bones[86].rotation.y=eyes[7][1];
+
+			effect.render(scene, camera5);
+			if(select===6| select===7)
+				effect.render(scene2,camera5);
+			
+			
+			
+		}
+	</script>
+
+</body>
+
+</html>
